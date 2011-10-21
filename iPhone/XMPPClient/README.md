@@ -8,14 +8,16 @@ Copy the .h and .mm file to the Plugins directory in your project. Copy the .js 
 First, [Create a clone of the xmppframework repository](http://code.google.com/p/xmppframework/source/checkout), the follow the instructions in the Wiki page(http://code.google.com/p/xmppframework/wiki/GettingStarted_iOS). 
 
 ## Example of Using the plugin ##
+A simple example could be:
+`
     var to = 'outrousuario@jabber.org';
 
-onMessage = function(from, message) {
+    onMessage = function(from, message) {
 	alert(from+" : "+message);
-}
+    }
     
            
-connect = function() {
+    connect = function() {
 	window.plugins.xmppclient.login(
         	"jabber.org", 
                  5222,
@@ -29,10 +31,10 @@ connect = function() {
                      alert("connect failed: " + status);
                  }
         );
-}
+    }
 
-document.addEventListener("deviceready", connect, true);
-
+    document.addEventListener("deviceready", connect, true);
+`
 ## BUGS AND CONTRIBUTIONS ##
 The latest bleeding-edge version is available [on GitHub](http://github.com/ascorbic/phonegap-plugins/tree/master/iPhone/)
 If you have a patch, fork my repo and send me a pull request. Submit bug reports on GitHub, please.
