@@ -9,32 +9,29 @@ First, [Create a clone of the xmppframework repository](http://code.google.com/p
 
 ## Example of Using the plugin ##
 A simple example could be:
-`
-    var to = 'outrousuario@jabber.org';
 
     onMessage = function(from, message) {
-	alert(from+" : "+message);
+        alert(from+" : "+message);
     }
-    
            
     connect = function() {
-	window.plugins.xmppclient.login(
-        	"jabber.org", 
-                 5222,
-                 "usuario@jabber.org",
-                 "senha",
-                 function() {
-		     window.plugins.xmppclient.onMessage(onMessage);
-                     window.plugins.xmppclient.send("Hi there!", to);
-                 },
-                 function(status) {
-                     alert("connect failed: " + status);
-                 }
+        window.plugins.xmppclient.login(
+            "jabber.org", 
+            5222,
+            "usuario@jabber.org",
+            "senha",
+            function() {
+                window.plugins.xmppclient.onMessage(onMessage);
+                window.plugins.xmppclient.send('outrousuario@jabber.org', "Hi there!");
+            },
+            function(status) {
+                alert("connect failed: " + status);
+            }
         );
     }
 
     document.addEventListener("deviceready", connect, true);
-`
+
 ## BUGS AND CONTRIBUTIONS ##
 The latest bleeding-edge version is available [on GitHub](http://github.com/ascorbic/phonegap-plugins/tree/master/iPhone/)
 If you have a patch, fork my repo and send me a pull request. Submit bug reports on GitHub, please.
