@@ -4,9 +4,7 @@
  *
  */
 
-var XMPPClient = function() { 
-    
-};
+var XMPPClient = { };
 
 XMPPClient.prototype = {
     
