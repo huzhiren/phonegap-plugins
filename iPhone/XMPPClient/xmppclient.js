@@ -28,6 +28,10 @@ XMPPClient.prototype = {
     
     isConnected : function(connected, disconnected) {
         return PhoneGap.exec("XMPPClient.isConnected", GetFunctionName(connected), GetFunctionName(disconnected));
+    },
+    
+    test : function() {
+        return PhoneGap.exec("XMPPClient.test");
     }
 };
 
