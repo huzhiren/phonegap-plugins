@@ -1,5 +1,5 @@
 # XMPP Client plugin for Phonegap #
-By Ryan Hubert
+By Ryan
 
 ## Adding the Plugin to your project ##
 Copy the .h and .mm file to the Plugins directory in your project. Copy the .js file to your www directory and reference it from your html file(s). Remember to add xmppClient->XMPPClient plugin definition in PhoneGap.plist. You also need to add the XMPPFramework to your project.
