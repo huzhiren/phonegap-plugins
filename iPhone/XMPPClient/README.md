@@ -9,10 +9,6 @@ First, [Create a clone of the xmppframework repository](http://code.google.com/p
 
 ## Example of Using the plugin ##
 A simple example could be:
-
-    onMessage = function(from, message) {
-        alert(from+" : "+message);
-    }
            
     connect = function() {
         window.plugins.xmppclient.login(
@@ -21,11 +17,13 @@ A simple example could be:
             "usuario@jabber.org",
             "senha",
             function() {
-                window.plugins.xmppclient.onMessage(onMessage);
-                window.plugins.xmppclient.send('outrousuario@jabber.org', "Hi there!");
+                window.plugins.xmppclient.onMessage(function(message) {
+			    	alert(message.from+' : '+message.body);
+			    });
+                window.plugins.xmppclient.send("Hi there!", 'outrousuario@jabber.org');
             },
-            function(status) {
-                alert("connect failed: " + status);
+            function(error) {
+                alert("connect failed: " + error);
             }
         );
     }

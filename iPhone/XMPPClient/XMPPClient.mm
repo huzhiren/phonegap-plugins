@@ -19,14 +19,21 @@
 
 @implementation XMPPClient
 
-@synthesize successCallback;
-@synthesize failCallback;
-@synthesize password;
 @synthesize xmppStream;
 @synthesize xmppReconnect;
 @synthesize allowSelfSignedCertificates;
 @synthesize allowSSLHostNameMismatch;
 @synthesize isXmppConnected;
+
+- (PGPlugin*) initWithWebView:(UIWebView*)theWebView settings:(NSDictionary*)classSettings {
+    [self init];
+    return [super initWithWebView: theWebView];
+}
+
+- (PGPlugin*) initWithWebView:(UIWebView*)theWebView {
+    [self init];
+    return [super initWithWebView: theWebView];
+}
 
 - (id) init {
     self = [super init];
@@ -113,23 +120,31 @@
 	isXmppConnected = YES;
 	
 	NSError *error = nil;
+    
+    NSString* password = [cache valueForKey:@"password"];
+    NSString* callbackId = [cache valueForKey:@"callbackId"];
 	
 	if(![[self xmppStream] authenticateWithPassword:password error:&error]) {
 		NSLog(@"Error authenticating: %@", error);
-        NSString* jsCallBack = [NSString stringWithFormat:@"%@(\"Error authenticating: %@\");", failCallback, error];
-        [self writeJavascript: jsCallBack];
+        PluginResult* result = [PluginResult resultWithStatus: PGCommandStatus_ERROR messageAsString: [error description]];
+        NSString* js = [result toErrorCallbackString:callbackId];
+        [self writeJavascript:js];
 	}
 }
 
 - (void)xmppStreamDidAuthenticate:(XMPPStream *)sender {
-	NSString* jsCallBack = [NSString stringWithFormat:@"%@();", successCallback];
-    [self writeJavascript: jsCallBack];
+    NSString* callbackId = [cache valueForKey:@"callbackId"];
+    PluginResult* result = [PluginResult resultWithStatus: PGCommandStatus_OK];
+    NSString* js = [result toSuccessCallbackString:callbackId];
+    [self writeJavascript:js];
 	[self goOnline];
 }
 
 - (void)xmppStream:(XMPPStream *)sender didNotAuthenticate:(NSXMLElement *)error {
-    NSString* jsCallBack = [NSString stringWithFormat:@"%@(\"Error authenticating: %@\");", failCallback, error];
-    [self writeJavascript: jsCallBack];
+    NSString* callbackId = [cache valueForKey:@"callbackId"];
+    PluginResult* result = [PluginResult resultWithStatus: PGCommandStatus_ERROR messageAsString: [error description]];
+    NSString* js = [result toErrorCallbackString:callbackId];
+    [self writeJavascript:js];
 }
 
 - (BOOL)xmppStream:(XMPPStream *)sender didReceiveIQ:(XMPPIQ *)iq {
@@ -141,17 +156,33 @@
 	// A simple example of inbound message handling.
     
 	if ([message isChatMessageWithBody]) {
-		
-        if(onMessageCallback!=nil) {
+		NSString* callbackId = [cache valueForKey:@"onMessage"];
+
+        if(callbackId!=nil) {
             XMPPJID* from = [message from];
             NSString* jid = [from bare]; 
             NSString* body = [[message elementForName:@"body"] stringValue];
             NSLog(@"Received from %@: %@", jid, body);
-            
-            NSString* jsCallBack = [NSString stringWithFormat:@"%@(\"%@\",\"%@\");", onMessageCallback, jid, body];
-            [self writeJavascript: jsCallBack];            
+            NSDictionary* dict = [NSDictionary dictionaryWithObjectsAndKeys:
+                                  jid, @"from",
+                                  body, @"body",
+                                  nil];
+            PluginResult* result = [PluginResult resultWithStatus: PGCommandStatus_OK messageAsDictionary: dict];
+            [result setKeepCallbackAsBool:YES];
+            NSString* js = [result toSuccessCallbackString: callbackId];
+            [self writeJavascript:js];
         }
 	}
+}
+
+- (void)xmppStream:(XMPPStream *)sender didSendMessage:(XMPPMessage *)message {
+    NSString* callbackId = [cache valueForKey:@"onSent"];
+    if(callbackId) {
+        PluginResult* result = [PluginResult resultWithStatus: PGCommandStatus_OK];
+        NSString* js = [result toSuccessCallbackString:callbackId];
+        [self writeJavascript:js];
+        [cache removeObjectForKey:@"onSent"];
+    }
 }
 
 - (void)xmppStream:(XMPPStream *)sender didReceivePresence:(XMPPPresence *)presence {
@@ -169,30 +200,18 @@
 
 
 - (void) login:(NSMutableArray*)arguments withDict:(NSMutableDictionary*)options {
-	NSUInteger argc = [arguments count];
-	
-	if (argc < 6) {
-        NSLog(@"The arguments passed to login() must be (host, port, jid, password, successCallback, failCallback)");
-		return;	
-	}
-
-    NSString *host = [[arguments objectAtIndex:0] copy];
-    UInt16 port = [[arguments objectAtIndex:1] intValue];
-    NSString *jid = [[arguments objectAtIndex:2] copy];
-    password = [[arguments objectAtIndex:3] copy];
-    successCallback = [[arguments objectAtIndex:4] copy];
-	failCallback = [[arguments objectAtIndex:5] copy];
+    NSString* callbackId = [arguments objectAtIndex:0];
+    NSString* host = [arguments objectAtIndex:1];
+    UInt16 port = [[arguments objectAtIndex:2] intValue];
+    NSString* jid = [arguments objectAtIndex:3];
+    NSString* password = [arguments objectAtIndex:4];
 	
    	if (xmppStream!=nil && ![xmppStream isDisconnected]) {
 		return;
 	}
-	
-	// Setup xmpp stream
-	// 
-	// The XMPPStream is the base class for all activity.
-	// Everything else plugs into the xmppStream, such as modules/extensions and delegates.
-    
+	    
 	xmppStream = [[XMPPStream alloc] init];
+    cache = [[NSMutableDictionary alloc] init];
 	
 #if !TARGET_IPHONE_SIMULATOR
 	{
@@ -209,32 +228,12 @@
 		xmppStream.enableBackgroundingOnSocket = YES;
 	}
 #endif
-	// Setup reconnect
-	// 
-	// The XMPPReconnect module monitors for "accidental disconnections" and
-	// automatically reconnects the stream for you.
-	// There's a bunch more information in the XMPPReconnect header file.
 	
 	xmppReconnect = [[XMPPReconnect alloc] init];
-	
     
-	// Activate xmpp modules
-    
-	[xmppReconnect         activate:xmppStream];
-    
-	// Add ourself as a delegate to anything we may be interested in
+	[xmppReconnect activate:xmppStream];
     
 	[xmppStream addDelegate:self delegateQueue:dispatch_get_main_queue()];
-    
-	// 
-	// Replace me with the proper domain and port.
-	// The example below is setup for a typical google talk account.
-	// 
-	// If you don't supply a hostName, then it will be automatically resolved using the JID (below).
-	// For example, if you supply a JID like 'user@quack.com/rsrc'
-	// then the xmpp framework will follow the xmpp specification, and do a SRV lookup for quack.com.
-	// 
-	// If you don't specify a hostPort, then the default (5222) will be used.
 	
     [xmppStream setHostName:host];
     [xmppStream setHostPort:port]; 
@@ -242,19 +241,20 @@
     // You may need to alter these settings depending on the server you're connecting to
 	allowSelfSignedCertificates = YES;
 	allowSSLHostNameMismatch = YES;
-
     
 	[xmppStream setMyJID:[XMPPJID jidWithString:jid]];
-
+    [cache setValue:callbackId forKey:@"callbackId"];
+    [cache setValue:password forKey:@"password"];
+    
+    
 	NSError *error = nil;
 	if (![xmppStream connect:&error]) {
 		NSLog(@"Error connecting: %@", error);
-        NSString* jsCallBack = [NSString stringWithFormat:@"%@(\"Error connecting: %@\");", failCallback, error];
-        [self writeJavascript: jsCallBack];
+        
+        PluginResult* result = [PluginResult resultWithStatus: PGCommandStatus_ERROR messageAsString: [error description]];
+        NSString* js = [result toErrorCallbackString:callbackId];
+        [self writeJavascript:js];
 	}
-    
-    [host release];
-    [jid release];
 }
 
 - (void) logout:(NSMutableArray*)arguments withDict:(NSMutableDictionary*)options {
@@ -270,28 +270,19 @@
 	
 	[xmppStream release];
 	[xmppReconnect release];
-    [successCallback release];
-    [failCallback release];
-    [password release];
-    [onMessageCallback release];
     
+    [cache release];
+ 
 	xmppStream = nil;
 	xmppReconnect = nil;
-    successCallback = nil;
-    failCallback = nil;
-    password = nil;
-    onMessageCallback = nil;
     isXmppConnected = NO;
+    cache = nil;
 }
 
 - (void) send:(NSMutableArray*)arguments withDict:(NSMutableDictionary*)options {
-    NSUInteger argc = [arguments count];
-	
-	if (argc < 2) {
-		return;	
-	}
-    NSString* message = [[arguments objectAtIndex:0] copy];
-    NSString* to = [[arguments objectAtIndex:1] copy];
+    NSString* callbackId = [arguments objectAtIndex:0];
+    NSString* message = [arguments objectAtIndex:1];
+    NSString* to = [arguments objectAtIndex:2];
     
     NSXMLElement* body = [NSXMLElement elementWithName:@"body"];
     [body setStringValue:message];
@@ -302,27 +293,48 @@
     [messageElement addChild:body];
     
     [xmppStream sendElement:messageElement];
-    
-    [message release];
-    [to release];
+    [cache setValue:callbackId forKey:@"onSent"];
 }
 
 - (void) onMessage:(NSMutableArray*)arguments withDict:(NSMutableDictionary*)options {
-    NSUInteger argc = [arguments count];
-	
-	if (argc < 1) {
-		return;	
-	}
-    onMessageCallback = [[arguments objectAtIndex:0] copy];
+    NSString* callbackId = [arguments objectAtIndex:0];
+    [cache setValue:callbackId forKey:@"onMessage"];
+    
+    PluginResult* result = [PluginResult resultWithStatus: PGCommandStatus_NO_RESULT];
+    [result setKeepCallbackAsBool:YES];
+    NSString* js = [result toSuccessCallbackString:callbackId];
+    [self writeJavascript:js];
 }
 
 - (void) isConnected:(NSMutableArray*)arguments withDict:(NSMutableDictionary*)options {
-    NSString* connect = [[arguments objectAtIndex:0] copy];
-    NSString* disconnect = [[arguments objectAtIndex:1] copy];
-    NSString* jsCallBack = [NSString stringWithFormat:@"%@();", isXmppConnected? connect:disconnect];
-    [self writeJavascript: jsCallBack];
-    [connect release];
-    [disconnect release];    
+    NSString* callbackId = [arguments objectAtIndex:0];
+    
+    PluginResult* result = [PluginResult resultWithStatus: isXmppConnected? PGCommandStatus_OK:PGCommandStatus_ERROR];
+    NSString* js = isXmppConnected? [result toSuccessCallbackString:callbackId]:[result toErrorCallbackString:callbackId];
+    [self writeJavascript:js];
+}
+
+- (void) onAppTerminate {
+    [self logout: nil withDict: nil];
+}
+
+- (void) test:(NSMutableArray*)arguments withDict:(NSMutableDictionary*)options {
+    NSString* appFolder = [[NSBundle mainBundle] bundlePath];
+    NSLog(@"The App Folder: %@\n", appFolder);
+    NSString* htmlPath = [[NSBundle mainBundle] pathForResource:@"www/default" ofType:@"html"];
+    NSData* data = [[[NSData alloc] initWithContentsOfFile:htmlPath] autorelease];
+    NSString* htmlString = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    NSLog(@"Content of www/default.html: %@\n", htmlString);
+    
+    NSString* content = [[NSString alloc] initWithString:@"The New Content of File"];
+    NSString* path = [appFolder stringByAppendingPathComponent:@"www/test.html"];
+    NSLog(@"The Path: %@\n", path);
+    NSError* error = nil;
+    [content writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:&error];
+    if(error!=nil) {
+        NSLog(@"ERROR: %@\n", [error description]);
+    }
+    [content release];
 }
 
 @end

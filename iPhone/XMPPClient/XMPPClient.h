@@ -16,9 +16,6 @@
 
 
 @interface XMPPClient : PGPlugin {
-    NSString* successCallback;
-	NSString* failCallback;
-    NSString* password;
     XMPPStream *xmppStream;
 	XMPPReconnect *xmppReconnect;
     
@@ -26,12 +23,9 @@
 	BOOL allowSSLHostNameMismatch;
     BOOL isXmppConnected;
     
-    NSString* onMessageCallback;
+    NSMutableDictionary* cache;
 }
 
-@property (nonatomic, readonly) NSString* successCallback;
-@property (nonatomic, readonly) NSString* failCallback;
-@property (nonatomic, readonly) NSString* password;
 @property (nonatomic, readonly) XMPPStream *xmppStream;
 @property (nonatomic, readonly) XMPPReconnect *xmppReconnect;
 @property (nonatomic, readonly) BOOL allowSelfSignedCertificates;
